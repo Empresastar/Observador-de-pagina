@@ -2,180 +2,156 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Monitor de URL Ultra</title>
+    <title>Monitor Estático - URL Fixa</title>
     <style>
-        :root {
-            --primary: #2563eb;
-            --bg: #f8fafc;
-            --card: #ffffff;
-        }
-
-        body { 
-            font-family: 'Segoe UI', system-ui, sans-serif; 
-            background: var(--bg); 
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-            height: 100vh; 
-            margin: 0; 
-        }
-
-        .container { 
-            background: var(--card); 
-            padding: 2rem; 
-            border-radius: 12px; 
-            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); 
-            width: 100%; 
-            max-width: 400px; 
-        }
-
-        h2 { color: #1e293b; margin-top: 0; font-size: 1.5rem; }
+        * { box-sizing: border-box; }
+        body, html { margin: 0; padding: 0; height: 100%; font-family: 'Segoe UI', sans-serif; background: #0f0f0f; color: #eee; overflow: hidden; }
         
-        input { 
-            width: 100%; 
-            padding: 12px; 
-            margin: 10px 0; 
-            border: 2px solid #e2e8f0; 
-            border-radius: 8px; 
-            box-sizing: border-box;
-            outline: none;
-            transition: border-color 0.2s;
-        }
+        .wrapper { display: flex; height: 100vh; width: 100vw; }
 
-        input:focus { border-color: var(--primary); }
+        /* Esquerda: Visualização */
+        .viewport { flex: 1; position: relative; background: #fff; }
+        iframe { width: 100%; height: 100%; border: none; }
+
+        /* Direita: Painel */
+        .panel { width: 320px; background: #181818; display: flex; flex-direction: column; padding: 20px; border-left: 2px solid #333; }
+        
+        .status-box { 
+            padding: 15px; border-radius: 8px; background: #222; border: 1px solid #444; 
+            margin-bottom: 20px; text-align: center; 
+        }
+        .url-display { font-size: 11px; color: #888; word-break: break-all; margin-top: 5px; display: block; }
+        
+        h2 { font-size: 14px; color: #00d4ff; text-transform: uppercase; margin: 0 0 10px 0; }
 
         button { 
-            width: 100%; 
-            padding: 12px; 
-            background: var(--primary); 
-            color: white; 
-            border: none; 
-            cursor: pointer; 
-            border-radius: 8px; 
-            font-weight: 600;
-            margin-bottom: 8px;
+            width: 100%; padding: 15px; border: none; border-radius: 6px; 
+            cursor: pointer; font-weight: bold; font-size: 14px; transition: 0.3s;
         }
+        .btn-off { background: #00d4ff; color: #000; }
+        .btn-on { background: #ff4757; color: #fff; }
 
-        .btn-stop { background: #ef4444; }
-
-        #status { 
-            margin-top: 20px; 
-            padding: 15px; 
-            border-radius: 8px; 
-            font-weight: bold; 
-            text-align: center;
-            font-size: 0.9rem;
+        .log { 
+            flex: 1; margin-top: 20px; overflow-y: auto; background: #000; 
+            padding: 10px; border-radius: 5px; font-family: monospace; font-size: 11px;
         }
+        .entry { padding: 5px 0; border-bottom: 1px solid #1a1a1a; color: #aaa; }
+        .entry.alert { color: #ff4757; font-weight: bold; background: #2d1616; border-left: 3px solid #ff4757; padding-left: 5px; }
+        .time { color: #555; margin-right: 5px; }
 
-        .idle { background: #f1f5f9; color: #64748b; }
-        .monitoring { background: #dcfce7; color: #166534; }
-        .changed { background: #fee2e2; color: #991b1b; animation: pulse 1s infinite; }
-
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.02); }
-            100% { transform: scale(1); }
+        #sync-tag {
+            position: absolute; top: 10px; left: 10px; padding: 5px 15px; 
+            background: rgba(0,0,0,0.8); border-radius: 20px; font-size: 12px;
+            border: 1px solid #00d4ff; color: #00d4ff; display: none; font-weight: bold;
         }
-
-        .info { font-size: 0.8rem; color: #94a3b8; margin-top: 10px; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h2>Monitor de Alteração</h2>
-    <input type="text" id="urlInput" placeholder="https://exemplo.com">
-    <button onclick="iniciar()">Iniciar Monitoramento</button>
-    <button class="btn-stop" onclick="parar()">Parar Tudo</button>
-    
-    <div id="status" class="idle">Status: Inativo</div>
-    <div class="info">
-        Última verificação: <span id="time">-</span><br>
-        Intervalo: 15 segundos (Auto-reload)
+<div class="wrapper">
+    <div class="viewport">
+        <div id="sync-tag">ANALISANDO...</div>
+        <iframe id="frame" src="about:blank"></iframe>
+    </div>
+
+    <div class="panel">
+        <div class="status-box">
+            <h2>Alvo Fixado</h2>
+            <span class="url-display" id="targetDisplay">https://www.exemplo.com</span>
+        </div>
+
+        <button id="mainBtn" class="btn-off" onclick="toggle()">Iniciar Monitor</button>
+
+        <div class="log" id="logBox">
+            <div class="entry">Sistema aguardando início...</div>
+        </div>
     </div>
 </div>
 
 <script>
-    // Configurações
-    const PROXY = "https://cors-anywhere.herokuapp.com/"; // Proxy para evitar erro de CORS
-    const INTERVALO = 15000; // 15 segundos
+    // --- CONFIGURAÇÃO ---
+    const URL_ALVO = "https://empresastar.github.io/Observador-de-pagina/"; // <--- MUDE A URL AQUI
+    const INTERVALO = 20000; // Tempo em milisegundos (20 segundos)
+    // --------------------
 
-    // Ao carregar a página, checa se deve continuar monitorando
-    window.onload = function() {
-        const estaMonitorando = localStorage.getItem('monitor_ativo');
-        const urlSalva = localStorage.getItem('monitor_url');
+    let ativo = false;
+    let ultimaHash = "";
+    let loop;
 
-        if (urlSalva) document.getElementById('urlInput').value = urlSalva;
+    document.getElementById('targetDisplay').innerText = URL_ALVO;
 
-        if (estaMonitorando === 'true') {
-            executarVerificacao();
-        }
-    };
+    async function scan() {
+        if (!ativo) return;
 
-    async function executarVerificacao() {
-        const urlOriginal = document.getElementById('urlInput').value;
-        const statusDiv = document.getElementById('status');
-        const timeSpan = document.getElementById('time');
+        const frame = document.getElementById('frame');
+        const tag = document.getElementById('sync-tag');
+        const hora = new Date().toLocaleTimeString();
 
-        if (!urlOriginal) return;
-
-        statusDiv.innerText = "Verificando...";
-        statusDiv.className = "monitoring";
-        timeSpan.innerText = new Date().toLocaleTimeString();
+        // Atualiza o iframe visualmente
+        frame.src = URL_ALVO;
+        tag.style.display = "block";
 
         try {
-            // Tentamos buscar o conteúdo da página via proxy
-            const response = await fetch(PROXY + urlOriginal);
-            const htmlNovo = await response.text();
-            
-            // Pegamos o que estava salvo antes do último reload
-            const htmlAntigo = localStorage.getItem('monitor_conteudo');
+            // Bypass de CORS via Proxy
+            const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(URL_ALVO)}`;
+            const response = await fetch(proxyUrl);
+            const html = await response.text();
 
-            if (htmlAntigo && htmlNovo !== htmlAntigo) {
-                // MUDOU!
-                statusDiv.innerText = "⚠️ ALTERAÇÃO DETECTADA!";
-                statusDiv.className = "changed";
-                localStorage.setItem('monitor_ativo', 'false');
+            // Limpeza para evitar alarmes falsos (remove scripts e tokens dinâmicos)
+            const conteudoAtual = html
+                .replace(/<script.*?>.*?<\/script>/gs, "")
+                .replace(/<input type="hidden".*?>/g, "")
+                .substring(0, 10000); 
+
+            if (ultimaHash && conteudoAtual !== ultimaHash) {
+                addLog(hora, "⚠️ MUDANÇA DETECTADA NO CONTEÚDO!", true);
+                tag.style.borderColor = "#ff4757";
+                tag.style.color = "#ff4757";
+                tag.innerText = "ALERTA DE ALTERAÇÃO";
                 
-                // Toca um som de alerta simples
-                alert("A página foi alterada!");
+                // Aviso sonoro básico
+                const beep = new AudioContext();
+                const osc = beep.createOscillator();
+                osc.connect(beep.destination);
+                osc.start();
+                osc.stop(beep.currentTime + 0.1);
             } else {
-                // NÃO MUDOU
-                localStorage.setItem('monitor_conteudo', htmlNovo);
-                localStorage.setItem('monitor_url', urlOriginal);
-                localStorage.setItem('monitor_ativo', 'true');
-
-                statusDiv.innerText = "Sem mudanças. Recarregando...";
-                
-                // Aguarda o intervalo e dá o REFRESH na página inteira
-                setTimeout(() => {
-                    location.reload();
-                }, INTERVALO);
+                addLog(hora, "Checagem: Sem alterações.", false);
+                tag.style.borderColor = "#00d4ff";
+                tag.style.color = "#00d4ff";
+                tag.innerText = "SINCRO: OK";
             }
 
-        } catch (error) {
-            statusDiv.innerText = "Erro: Ative o acesso ao Proxy ou URL inválida";
-            statusDiv.className = "idle";
-            console.error(error);
+            ultimaHash = conteudoAtual;
+
+        } catch (e) {
+            addLog(hora, "Erro de conexão/CORS.", false);
         }
     }
 
-    function iniciar() {
-        const url = document.getElementById('urlInput').value;
-        if (!url.startsWith('http')) {
-            alert("Insira uma URL válida começando com http ou https");
-            return;
-        }
-        localStorage.setItem('monitor_url', url);
-        localStorage.setItem('monitor_ativo', 'true');
-        localStorage.removeItem('monitor_conteudo'); // Limpa para a primeira verificação
-        executarVerificacao();
+    function addLog(hora, msg, isAlert) {
+        const div = document.createElement('div');
+        div.className = `entry ${isAlert ? 'alert' : ''}`;
+        div.innerHTML = `<span class="time">[${hora}]</span> ${msg}`;
+        const box = document.getElementById('logBox');
+        box.prepend(div);
     }
 
-    function parar() {
-        localStorage.clear();
-        location.reload();
+    function toggle() {
+        const btn = document.getElementById('mainBtn');
+        if (!ativo) {
+            ativo = true;
+            btn.innerText = "Parar Ciclo";
+            btn.className = "btn-on";
+            scan();
+            loop = setInterval(scan, INTERVALO);
+        } else {
+            ativo = false;
+            btn.innerText = "Iniciar Monitor";
+            btn.className = "btn-off";
+            clearInterval(loop);
+            document.getElementById('sync-tag').style.display = "none";
+        }
     }
 </script>
 
