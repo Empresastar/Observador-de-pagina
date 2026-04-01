@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor de URL Ultra</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --bg: #f8fafc;
+            --card: #ffffff;
+        }
+
+        body { 
+            font-family: 'Segoe UI', system-ui, sans-serif; 
+            background: var(--bg); 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            margin: 0; 
+        }
+
+        .container { 
+            background: var(--card); 
+            padding: 2rem; 
+            border-radius: 12px; 
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); 
+            width: 100%; 
+            max-width: 400px; 
+        }
+
+        h2 { color: #1e293b; margin-top: 0; font-size: 1.5rem; }
+        
+        input { 
+            width: 100%; 
+            padding: 12px; 
+            margin: 10px 0; 
+            border: 2px solid #e2e8f0; 
+            border-radius: 8px; 
+            box-sizing: border-box;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input:focus { border-color: var(--primary); }
+
+        button { 
+            width: 100%; 
+            padding: 12px; 
+            background: var(--primary); 
+            color: white; 
+            border: none; 
+            cursor: pointer; 
+            border-radius: 8px; 
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .btn-stop { background: #ef4444; }
+
+        #status { 
+            margin-top: 20px; 
+            padding: 15px; 
+            border-radius: 8px; 
+            font-weight: bold; 
+            text-align: center;
+            font-size: 0.9rem;
+        }
+
+        .idle { background: #f1f5f9; color: #64748b; }
+        .monitoring { background: #dcfce7; color: #166534; }
+        .changed { background: #fee2e2; color: #991b1b; animation: pulse 1s infinite; }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+            100% { transform: scale(1); }
+        }
+
+        .info { font-size: 0.8rem; color: #94a3b8; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Monitor de Alteração</h2>
+    <input type="text" id="urlInput" placeholder="https://exemplo.com">
+    <button onclick="iniciar()">Iniciar Monitoramento</button>
+    <button class="btn-stop" onclick="parar()">Parar Tudo</button>
+    
+    <div id="status" class="idle">Status: Inativo</div>
+    <div class="info">
+        Última verificação: <span id="time">-</span><br>
+        Intervalo: 15 segundos (Auto-reload)
+    </div>
+</div>
+
+<script>
+    // Configurações
+    const PROXY = "https://cors-anywhere.herokuapp.com/"; // Proxy para evitar erro de CORS
+    const INTERVALO = 15000; // 15 segundos
+
+    // Ao carregar a página, checa se deve continuar monitorando
+    window.onload = function() {
+        const estaMonitorando = localStorage.getItem('monitor_ativo');
+        const urlSalva = localStorage.getItem('monitor_url');
+
+        if (urlSalva) document.getElementById('urlInput').value = urlSalva;
+
+        if (estaMonitorando === 'true') {
+            executarVerificacao();
+        }
+    };
+
+    async function executarVerificacao() {
+        const urlOriginal = document.getElementById('urlInput').value;
+        const statusDiv = document.getElementById('status');
+        const timeSpan = document.getElementById('time');
+
+        if (!urlOriginal) return;
+
+        statusDiv.innerText = "Verificando...";
+        statusDiv.className = "monitoring";
+        timeSpan.innerText = new Date().toLocaleTimeString();
+
+        try {
+            // Tentamos buscar o conteúdo da página via proxy
+            const response = await fetch(PROXY + urlOriginal);
+            const htmlNovo = await response.text();
+            
+            // Pegamos o que estava salvo antes do último reload
+            const htmlAntigo = localStorage.getItem('monitor_conteudo');
+
+            if (htmlAntigo && htmlNovo !== htmlAntigo) {
+                // MUDOU!
+                statusDiv.innerText = "⚠️ ALTERAÇÃO DETECTADA!";
+                statusDiv.className = "changed";
+                localStorage.setItem('monitor_ativo', 'false');
+                
+                // Toca um som de alerta simples
+                alert("A página foi alterada!");
+            } else {
+                // NÃO MUDOU
+                localStorage.setItem('monitor_conteudo', htmlNovo);
+                localStorage.setItem('monitor_url', urlOriginal);
+                localStorage.setItem('monitor_ativo', 'true');
+
+                statusDiv.innerText = "Sem mudanças. Recarregando...";
+                
+                // Aguarda o intervalo e dá o REFRESH na página inteira
+                setTimeout(() => {
+                    location.reload();
+                }, INTERVALO);
+            }
+
+        } catch (error) {
+            statusDiv.innerText = "Erro: Ative o acesso ao Proxy ou URL inválida";
+            statusDiv.className = "idle";
+            console.error(error);
+        }
+    }
+
+    function iniciar() {
+        const url = document.getElementById('urlInput').value;
+        if (!url.startsWith('http')) {
+            alert("Insira uma URL válida começando com http ou https");
+            return;
+        }
+        localStorage.setItem('monitor_url', url);
+        localStorage.setItem('monitor_ativo', 'true');
+        localStorage.removeItem('monitor_conteudo'); // Limpa para a primeira verificação
+        executarVerificacao();
+    }
+
+    function parar() {
+        localStorage.clear();
+        location.reload();
+    }
+</script>
+
+</body>
+</html>

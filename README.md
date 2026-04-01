@@ -1,1 +1,0 @@
-# Observador-de-pagina
